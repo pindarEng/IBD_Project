@@ -20,6 +20,7 @@ This script exposes a REST API to accept URLs and pushes them to the Kafka topic
 uvicorn scripts.producer_api:app --reload
 ```
 **use localhost:8000/docs**
+
 ## 2. Consumer (Worker)
 
 This script listens to the `url_submission` topic and processes URLs based on the tiered logic:
