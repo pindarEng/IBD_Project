@@ -16,6 +16,10 @@ RUN pip install --no-cache-dir \
     ipykernel \
     jupyter \
     notebook \
-    seaborn
+    seaborn \
+    kafka-python \
+    fastapi \
+    uvicorn \
+    python-whois
 
 WORKDIR /workspaces
