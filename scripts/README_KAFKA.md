@@ -17,7 +17,7 @@ This script exposes a REST API to accept URLs and pushes them to the Kafka topic
 
 **Run the Producer:**
 ```bash
-uvicorn scripts.producer_api:app --reload
+uvicorn scripts.producer_fastapi:app --reload
 ```
 **use localhost:8000/docs**
 

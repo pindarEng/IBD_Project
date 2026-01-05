@@ -42,3 +42,7 @@ async def scan_url(submission: URLSubmission):
 @app.get("/")
 def read_root():
     return {"message": "URL Scanner API is running. POST to /scan/ to submit URLs."}
+
+
+
+#TODO: /metrics endpoint for prometheus and some dashboards in grafana.

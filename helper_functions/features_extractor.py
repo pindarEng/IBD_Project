@@ -68,6 +68,7 @@ def perform_lexical_analysis(url) -> pd.DataFrame:
     # print(df)
     return df
 
+# url : a b c d features -> input
 
 def perform_deep_analysis(df: pd.DataFrame):
     """

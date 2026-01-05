@@ -36,6 +36,7 @@ def process_url(data):
     else:
         # faster path just lexical 
         perform_lexical_analysis(url)
+        #TODO:check if number of rows / elements in dataset enough?
         #TODO:simple lexical features model
 
 
