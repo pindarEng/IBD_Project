@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
     kafka-python \
     fastapi \
     uvicorn \
-    python-whois
+    python-whois \
+    xgboost
 
 WORKDIR /workspaces
