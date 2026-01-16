@@ -3,14 +3,12 @@ ML Models Package
 Machine learning models for malicious URL detection
 """
 
-from .data_loader import URLDataset, create_sample_dataset
+from .data_loader import URLDataset
 from .model_trainer import MaliciousURLDetector
-from .predictor import URLPredictor, StreamingPredictor
+from .predictor import URLPredictor
 
 __all__ = [
     'URLDataset',
-    'create_sample_dataset',
     'MaliciousURLDetector',
-    'URLPredictor',
-    'StreamingPredictor'
+    'URLPredictor'
 ]
