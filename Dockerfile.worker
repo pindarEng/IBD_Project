@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY scripts/consumer_tiered_pipeline.py /app/scripts/
+COPY helper_functions /app/helper_functions
+COPY models /app/models
+COPY ml_scripts /app/ml_scripts
+
+EXPOSE 8001
+
+CMD ["python", "scripts/consumer_tiered_pipeline.py"]

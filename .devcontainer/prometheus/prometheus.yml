@@ -1,24 +1,24 @@
 # prometheus/prometheus.yml
 global:
-  scrape_interval: 5s # How frequently to scrape targets by default
-  evaluation_interval: 5s # How frequently to evaluate rules
+    scrape_interval: 5s # How frequently to scrape targets by default
+    evaluation_interval: 5s # How frequently to evaluate rules
 
 scrape_configs:
-  # Job to scrape the Kafka Consumer metrics
-  - job_name: 'kafka-consumer'
-    static_configs:
-      - targets: ['host.docker.internal:8000'] # Use service name 'consumer' and the EXPOSEd port 8000
-        labels:
-          application: 'ml-prediction-consumer'
+    # Job to scrape the Kafka Consumer metrics
+    - job_name: "url-api"
+      static_configs:
+          - targets: ["url-api:8000"] # Use service name 'consumer' and the EXPOSEd port 8000
+            labels:
+                application: "ml-prediction-consumer"
 
-  # Job to scrape the Kafka Producer metrics
-  - job_name: 'kafka-producer'
-    static_configs:
-      - targets: ['host.docker.internal:8001'] # Use service name 'producer' and the EXPOSEd port 8001
-        labels:
-          application: 'data-producer'
+    # Job to scrape the Kafka Producer metrics
+    - job_name: "url-producer"
+      static_configs:
+          - targets: ["url-worker:8001"] # Use service name 'producer' and the EXPOSEd port 8001
+            labels:
+                application: "data-producer"
 
-  # Optional: Scrape Prometheus itself
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
+    # Optional: Scrape Prometheus itself
+    - job_name: "prometheus"
+      static_configs:
+          - targets: ["localhost:9090"]
