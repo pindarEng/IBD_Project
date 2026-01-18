@@ -5,12 +5,16 @@ import re
 import sys
 import os
 from pathlib import Path
+from prometheus_client import start_http_server, Counter, Gauge
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from helper_functions.kafka_scripts import KafkaConsumerService
 from helper_functions.features_extractor import perform_lexical_analysis, perform_deep_analysis, has_risk_keywords
+
+URLS_PROCESSED = Counter('worker_urls_processed_total', 'URLs processed', ['risk_level'])
+IN_PROGRESS = Gauge('worker_urls_in_progress', 'URLs currently being processed')
 
 # Import ML prediction modules
 try:
@@ -29,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Kafka Configuration
 KAFKA_TOPIC = "url_submission"
-KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 GROUP_ID = "url_scanner_group"
 
 # Model paths (update after training)
@@ -59,9 +63,9 @@ except Exception as e:
 
 def process_url(data):
     url = data.get("url")
-    
     if not url:
         return
+    IN_PROGRESS.inc()
 
     logger.info(f"Received URL: {url}")
 
@@ -90,10 +94,14 @@ def process_url(data):
         
     except Exception as e:
         logger.error(f"Error processing URL {url}: {e}")
-
+    finally:
+        IN_PROGRESS.dec()
+        risk_level = "high" if high_risk else "low"
+        URLS_PROCESSED.labels(risk_level=risk_level).inc()
 
 def start_consumer():
     consumer_service = KafkaConsumerService(KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC, GROUP_ID)
+    start_http_server(8001)
     logger.info(f"Listening for messages on topic '{KAFKA_TOPIC}'...")
     consumer_service.start_listening(process_url)
 

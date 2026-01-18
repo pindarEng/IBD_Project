@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: url-worker
+spec:
+    replicas: 1 # Scale this to 3 later to show off!
+    selector:
+        matchLabels:
+            app: url-worker
+    template:
+        metadata:
+            labels:
+                app: url-worker
+            annotations:
+                prometheus.io/scrape: "true"
+                prometheus.io/port: "8001"
+        spec:
+            containers:
+                - name: url-worker
+                  image: andreimurica/url-worker:latest
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 8001
+                  env:
+                      - name: KAFKA_BOOTSTRAP_SERVERS
+                        value: "kafka-service:9092"
+                  resources:
+                      requests:
+                          cpu: "100m" # 10% of a CPU core
+                          memory: "128Mi"
+                      limits:
+                          cpu: "500m" # Max 50% of a CPU core
+                          memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: url-worker
+spec:
+    type: ClusterIP
+    selector:
+        app: url-worker
+    ports:
+        - port: 8001
+          targetPort: 8001
+          name: metrics

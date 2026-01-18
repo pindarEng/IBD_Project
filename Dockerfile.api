@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt . 
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+
+COPY scripts/producer_fastapi.py /app/scripts/
+COPY helper_functions /app/helper_functions
+COPY models /app/models
+COPY ml_scripts /app/ml_scripts
+
+
+EXPOSE 8000
+
+
+CMD ["uvicorn", "scripts.producer_fastapi:app", "--host", "0.0.0.0", "--port", "8000"]
