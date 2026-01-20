@@ -2,10 +2,25 @@ import time
 import logging
 import re, string
 import pandas as pd
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from collections import Counter
 import math
 import whois
+import requests
+from html.parser import HTMLParser
+
+# Import URL expansion functions from separate module
+from .url_expander import (
+    expand_url,
+    expand_url_with_browser,
+    expand_url_comprehensive,
+    expand_url_if_shortened,
+    expand_url_full_coverage,
+    expand_url_aggressive,
+    has_shortening_service,
+    SHORTENERS,
+    SELENIUM_AVAILABLE
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,8 +28,6 @@ logger = logging.getLogger(__name__)
 
 # higher risk words
 RISK_KEYWORDS = ["bank", "payment", "wire", "transfer", "paypal", "secure", "login"]
-# some short forms
-# SHORTENERS = ["bit.ly", "goo.gl", "tinyurl.com", "t.co", "is.gd", "buff.ly"]
 
 
 def get_url_length(url): 
@@ -142,50 +155,76 @@ def has_suspicious_tld(url):
     suspicious_tlds = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.work']
     return int(any(url.lower().endswith(tld) for tld in suspicious_tlds))
 
-# def has_shortening_service(url):
-#     pattern = re.compile(r'bit\.ly|goo\.gl|tinyurl|ow\.ly|t\.co|tr\.im|is\.gd|cli\.gs|j\.mp|bit\.do')
-#     return int(bool(pattern.search(url)))
 
-
-# def is_short_url(url):
-#     pattern = re.compile(r'bit\.ly|goo\.gl|tinyurl|ow\.ly|t\.co|tr\.im|is\.gd|cli\.gs|j\.mp|bit\.do')
-#     return int(bool(pattern.search(url)))
-
-
-# TODO: expand url - somehow
-# def expand_url(short_url):
-#     """
-#     Simulate URL expansion. 
-#     In production, this would use requests.head(url, allow_redirects=True).
-#     """
-#     logger.info(f"Expanding URL: {short_url}")
-#     # Mock expansion logic
-#     time.sleep(0.5) # Simulate network delay
-#     expanded = f"{short_url}/expanded/target-page"
-#     logger.info(f"Expanded to: {expanded}")
-#     return expanded
-
-def perform_lexical_analysis(url) -> pd.DataFrame:
+def perform_lexical_analysis(url, expand_urls=False, timeout=5, aggressive_expansion=False) -> pd.DataFrame:
     """
     Perform comprehensive lexical and statistical analysis on URL.
     Extracts features mentioned in the paper for malicious URL detection.
+    
+    Args:
+        url: The URL to analyze
+        expand_urls: Whether to expand shortened URLs (default: False)
+        timeout: Timeout for URL expansion requests in seconds (default: 5)
+        aggressive_expansion: Attempt expansion on ALL URLs, not just known shorteners (default: False)
     """
     logger.debug(f"Performing lexical analysis for {url}")
     df = pd.DataFrame([{'url': url}])
-    return perform_lexical_analysis_on_df(df)
+    return perform_lexical_analysis_on_df(df, expand_urls=expand_urls, timeout=timeout, aggressive_expansion=aggressive_expansion)
 
-def perform_lexical_analysis_on_df(df_input: pd.DataFrame) -> pd.DataFrame:
+def perform_lexical_analysis_on_df(df_input: pd.DataFrame, expand_urls=False, timeout=5, aggressive_expansion=False) -> pd.DataFrame:
     """
     Batch processing for lexical analysis.
+    
+    Args:
+        df_input: DataFrame with 'url' column
+        expand_urls: Whether to expand shortened URLs (default: False)
+        timeout: Timeout for URL expansion requests in seconds (default: 5)
+        aggressive_expansion: Attempt expansion on ALL URLs, not just known shorteners (default: False)
     """
     df = df_input.copy()
     
     # Store original URL with scheme
     original_url = df['url'].copy()
-    df['has_https'] = df['url'].apply(contains_https)
+    
+    # URL expansion if requested
+    if expand_urls:
+        if aggressive_expansion:
+            logger.info("Aggressive expansion enabled - attempting on all URLs...")
+            df['is_shortened_url'] = 0  # Not using shortener detection
+            
+            # Attempt expansion on ALL URLs
+            def aggressive_safe_expand(url):
+                result = expand_url_aggressive(url, timeout=timeout)
+                return result['expanded_url'], result['redirect_count']
+            
+            expansion_results = df['url'].apply(aggressive_safe_expand)
+            df['expanded_url'] = expansion_results.apply(lambda x: x[0])
+            df['redirect_count'] = expansion_results.apply(lambda x: x[1])
+        else:
+            logger.info("Checking for known shortened URLs and expanding...")
+            df['is_shortened_url'] = df['url'].apply(has_shortening_service)
+            
+            # Expand only known shortened URLs to save time
+            def safe_expand(url):
+                if has_shortening_service(url):
+                    result = expand_url_if_shortened(url, timeout=timeout)
+                    return result['expanded_url'], result['redirect_count']
+                return url, 0
+            
+            expansion_results = df['url'].apply(safe_expand)
+            df['expanded_url'] = expansion_results.apply(lambda x: x[0])
+            df['redirect_count'] = expansion_results.apply(lambda x: x[1])        # Use expanded URL for further analysis
+        analysis_url = df['expanded_url'].copy()
+    else:
+        df['is_shortened_url'] = df['url'].apply(has_shortening_service)
+        df['expanded_url'] = df['url']
+        df['redirect_count'] = 0
+        analysis_url = df['url'].copy()
+    
+    df['has_https'] = analysis_url.apply(contains_https)
 
     # Clean URL for analysis
-    df['url'] = (df['url']
+    df['url'] = (analysis_url
                  .str.replace("http://", "", regex=False)
                  .str.replace("https://", "", regex=False)
                  .str.replace("www.", "", regex=False)

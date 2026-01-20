@@ -11,7 +11,17 @@ from prometheus_client import start_http_server, Counter, Gauge
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from helper_functions.kafka_scripts import KafkaConsumerService
-from helper_functions.features_extractor import perform_lexical_analysis, perform_deep_analysis, has_risk_keywords
+from helper_functions.features_extractor import (
+    perform_lexical_analysis, 
+    perform_deep_analysis, 
+    has_risk_keywords
+)
+from helper_functions.url_expander import (
+    expand_url_comprehensive,
+    expand_url_aggressive,
+    expand_url_if_shortened,
+    has_shortening_service
+)
 
 URLS_PROCESSED = Counter('worker_urls_processed_total', 'URLs processed', ['risk_level'])
 IN_PROGRESS = Gauge('worker_urls_in_progress', 'URLs currently being processed')
@@ -35,6 +45,10 @@ logger = logging.getLogger(__name__)
 KAFKA_TOPIC = "url_submission"
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 GROUP_ID = "url_scanner_group"
+
+# URL Expansion Configuration (always enabled with comprehensive mode)
+URL_EXPANSION_TIMEOUT = int(os.getenv("URL_EXPANSION_TIMEOUT", "10"))
+URL_EXPANSION_MODE = os.getenv("URL_EXPANSION_MODE", "comprehensive").lower()  # comprehensive, aggressive, standard
 
 # Model paths (update after training)
 LIGHTWEIGHT_MODEL_PATH = "models/random_forest_model.pkl"
@@ -68,6 +82,52 @@ def process_url(data):
     IN_PROGRESS.inc()
 
     logger.info(f"Received URL: {url}")
+    
+    # Always expand URL before feature extraction (comprehensive mode by default)
+    original_url = url
+    try:
+        if URL_EXPANSION_MODE == "comprehensive":
+            # RECOMMENDED: Smart method selection (HTTP first, browser fallback)
+            logger.info(f"[URL EXPANSION] Using comprehensive mode for: {url}")
+            expansion_result = expand_url_comprehensive(url, timeout=URL_EXPANSION_TIMEOUT)
+            
+            if expansion_result['was_expanded']:
+                url = expansion_result['expanded_url']
+                logger.info(f"[URL EXPANSION] ✓ Expanded using {expansion_result['method_used'].upper()}: {url}")
+                logger.info(f"[URL EXPANSION] Redirects: {expansion_result['redirect_count']}")
+            else:
+                logger.debug(f"[URL EXPANSION] No redirects found (not shortened)")
+                
+        elif URL_EXPANSION_MODE == "aggressive":
+            # Try to expand ALL URLs, not just known shorteners
+            logger.info(f"[URL EXPANSION] Using aggressive mode for: {url}")
+            expansion_result = expand_url_aggressive(url, timeout=URL_EXPANSION_TIMEOUT)
+            
+            if expansion_result['was_expanded']:
+                url = expansion_result['expanded_url']
+                logger.info(f"[URL EXPANSION] ✓ Found redirect: {url}")
+                logger.info(f"[URL EXPANSION] Redirects: {expansion_result['redirect_count']}")
+            else:
+                logger.debug(f"[URL EXPANSION] No redirects found")
+                
+        else:  # standard mode
+            # Only expand known shorteners
+            if has_shortening_service(url):
+                logger.info(f"[URL EXPANSION] Shortened URL detected: {url}")
+                expansion_result = expand_url_if_shortened(url, timeout=URL_EXPANSION_TIMEOUT)
+                
+                if expansion_result['expansion_success'] and expansion_result['expanded_url'] != url:
+                    url = expansion_result['expanded_url']
+                    logger.info(f"[URL EXPANSION] ✓ Expanded to: {url}")
+                    logger.info(f"[URL EXPANSION] Redirects: {expansion_result['redirect_count']}")
+                else:
+                    logger.warning(f"[URL EXPANSION] Failed to expand, using original")
+            else:
+                logger.debug(f"[URL EXPANSION] Not a known shortener, skipping")
+    except Exception as e:
+        logger.error(f"[URL EXPANSION] Error during expansion: {e}")
+        logger.warning(f"[URL EXPANSION] Using original URL: {original_url}")
+        url = original_url
 
     high_risk = has_risk_keywords(url) > 0
     
@@ -76,8 +136,8 @@ def process_url(data):
     
     # Both paths: perform lexical analysis and ML prediction
     try:
-        # Extract lexical features
-        features_df = perform_lexical_analysis(url)
+        # Extract lexical features (use expanded URL)
+        features_df = perform_lexical_analysis(url, expand_urls=False)  # Already expanded above
         
         # Run through ML model (lightweight only for now)
         result = predictor.predict_single_url(url, return_confidence=True)
@@ -103,6 +163,14 @@ def start_consumer():
     consumer_service = KafkaConsumerService(KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC, GROUP_ID)
     start_http_server(8001)
     logger.info(f"Listening for messages on topic '{KAFKA_TOPIC}'...")
+    logger.info(f"URL Expansion: ENABLED (always on)")
+    mode_description = {
+        'comprehensive': 'COMPREHENSIVE (HTTP → Browser fallback, RECOMMENDED)',
+        'aggressive': 'AGGRESSIVE (all URLs)',
+        'standard': 'STANDARD (known shorteners only)'
+    }.get(URL_EXPANSION_MODE, URL_EXPANSION_MODE.upper())
+    logger.info(f"URL Expansion Mode: {mode_description}")
+    logger.info(f"URL Expansion Timeout: {URL_EXPANSION_TIMEOUT}s")
     consumer_service.start_listening(process_url)
 
 
