@@ -1,4 +1,15 @@
 services:
+
+    devcontainer:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      volumes:
+        - ..:/workspace/IBD project:cached
+      command: sleep infinity
+      networks:
+        - tools
+
     url-api:
         build:
             context: ..
@@ -11,7 +22,7 @@ services:
             - tools
         depends_on:
             - kafka
-
+    
     url-worker:
         build:
             context: ..

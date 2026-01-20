@@ -19,12 +19,14 @@ try:
     
     # Get absolute path to models directory
     SCRIPT_DIR = Path(__file__).parent.parent
-    LIGHTWEIGHT_MODEL_PATH = str(SCRIPT_DIR / "models" / "random_forest_model.pkl")
+    LIGHTWEIGHT_MODEL_PATH = str(SCRIPT_DIR / "models" / "xgboost_model.pkl")
     DEEP_MODEL_PATH = str(SCRIPT_DIR / "models" / "xgboost_model.pkl")
+    WHITELIST_PATH = str(SCRIPT_DIR / "datasets" / "raw" / "cleaned_topreal_urls.csv")
     
     logger = logging.getLogger(__name__)
     logger.info(f"Looking for models at: {LIGHTWEIGHT_MODEL_PATH}")
     logger.info(f"Looking for models at: {DEEP_MODEL_PATH}")
+    logger.info(f"Looking for whitelist at: {WHITELIST_PATH}")
     
     # Check if model files exist
     if not Path(LIGHTWEIGHT_MODEL_PATH).exists():
@@ -34,7 +36,8 @@ try:
     
     predictor = URLPredictor(
         lightweight_model_path=LIGHTWEIGHT_MODEL_PATH,
-        deep_model_path=DEEP_MODEL_PATH
+        deep_model_path=DEEP_MODEL_PATH,
+        whitelist_path=WHITELIST_PATH
     )
     ML_AVAILABLE = True
     logging.info("ML models loaded successfully")

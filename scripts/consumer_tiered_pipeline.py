@@ -5,7 +5,7 @@ import re
 import sys
 import os
 from pathlib import Path
-from prometheus_client import start_http_server, Counter, Gauge
+from prometheus_client import start_http_server, Counter, Gauge, Histogram
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,6 +15,9 @@ from helper_functions.features_extractor import perform_lexical_analysis, perfor
 
 URLS_PROCESSED = Counter('worker_urls_processed_total', 'URLs processed', ['risk_level'])
 IN_PROGRESS = Gauge('worker_urls_in_progress', 'URLs currently being processed')
+PREDICTION_LABEL = Counter('worker_prediction_label_total', 'Prediction labels', ['label'])
+PREDICTION_CONFIDENCE = Histogram('worker_prediction_confidence', 'Prediction confidence scores', buckets=(0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0))
+MALICIOUS_PROBABILITY = Histogram('worker_malicious_probability', 'Malicious probability scores', buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0))
 
 # Import ML prediction modules
 try:
@@ -37,8 +40,9 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 GROUP_ID = "url_scanner_group"
 
 # Model paths (update after training)
-LIGHTWEIGHT_MODEL_PATH = "models/random_forest_model.pkl"
+LIGHTWEIGHT_MODEL_PATH = "models/xgboost_model.pkl"
 DEEP_MODEL_PATH = "models/xgboost_model.pkl"
+WHITELIST_PATH = "datasets/raw/cleaned_topreal_urls.csv"
 
 # Initialize predictor (assume models exist)
 if not ML_MODELS_AVAILABLE or URLPredictor is None:
@@ -48,7 +52,8 @@ if not ML_MODELS_AVAILABLE or URLPredictor is None:
 try:
     predictor = URLPredictor(
         lightweight_model_path=LIGHTWEIGHT_MODEL_PATH,
-        deep_model_path=DEEP_MODEL_PATH
+        deep_model_path=DEEP_MODEL_PATH,
+        whitelist_path=WHITELIST_PATH
     )
     logger.info("ML models loaded successfully")
     logger.info(f"Lightweight model: {LIGHTWEIGHT_MODEL_PATH}")
@@ -87,6 +92,11 @@ def process_url(data):
         logger.info(f"[PREDICTION] Label: {result['label'].upper()}")
         logger.info(f"[PREDICTION] Confidence: {result['confidence']:.2%}")
         logger.info(f"[PREDICTION] Malicious Probability: {result['malicious_probability']:.2%}")
+        
+        # Export metrics for Grafana
+        PREDICTION_LABEL.labels(label=result['label']).inc()
+        PREDICTION_CONFIDENCE.observe(result['confidence'])
+        MALICIOUS_PROBABILITY.observe(result['malicious_probability'])
         
         # Alert if malicious
         if result['label'] == 'malicious':
