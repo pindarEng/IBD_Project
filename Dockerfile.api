@@ -7,7 +7,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-
+COPY datasets /app/datasets
 COPY scripts/producer_fastapi.py /app/scripts/
 COPY helper_functions /app/helper_functions
 COPY models /app/models
