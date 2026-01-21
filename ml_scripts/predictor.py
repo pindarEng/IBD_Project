@@ -4,6 +4,7 @@ import os
 import logging
 import pandas as pd
 import numpy as np
+from urllib.parse import urlparse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -16,17 +17,38 @@ logger = logging.getLogger(__name__)
 class URLPredictor:
 
 
-    def __init__(self, lightweight_model_path=None, deep_model_path=None):
+    def __init__(self, lightweight_model_path=None, deep_model_path=None, whitelist_path=None):
 
         self.lightweight_model = None
         self.deep_model = None
         self.feature_names = None
+        self.whitelist = set()
+
+        if whitelist_path:
+            self._load_whitelist(whitelist_path)
 
         if lightweight_model_path:
             self.load_lightweight_model(lightweight_model_path)
 
         if deep_model_path:
             self.load_deep_model(deep_model_path)
+
+    def _load_whitelist(self, path):
+        try:
+            df = pd.read_csv(path)
+            if 'url' in df.columns:
+                def extract_domain(url):
+                    parsed = urlparse(url if str(url).startswith('http') else 'http://' + str(url))
+                    domain = parsed.netloc.split(':')[0]
+                    return domain.replace('www.', '')
+
+                domains = df['url'].apply(extract_domain).unique()
+                self.whitelist = set(domains)
+                logger.info(f"Loaded {len(self.whitelist)} domains into whitelist")
+            else:
+                logger.warning("Whitelist CSV missing 'url' column")
+        except Exception as e:
+            logger.error(f"Failed to load whitelist from {path}: {e}")
 
     def load_lightweight_model(self, model_path):
 
@@ -44,6 +66,24 @@ class URLPredictor:
         logger.info("Deep model loaded successfully")
 
     def predict_single_url(self, url, return_confidence=True):
+
+        # Check whitelist first
+        try:
+            input_domain = urlparse(url if url.startswith('http') else 'http://' + url).netloc.split(':')[0].replace('www.', '')
+            if input_domain in self.whitelist:
+                logger.info(f"URL {url} matched whitelist (domain: {input_domain})")
+                result = {
+                    'url': url,
+                    'prediction': 0,
+                    'label': 'benign'
+                }
+                if return_confidence:
+                    result['confidence'] = 1.0
+                    result['malicious_probability'] = 0.0
+                    result['benign_probability'] = 1.0
+                return result
+        except Exception as e:
+            logger.warning(f"Error checking whitelist: {e}")
 
         if self.lightweight_model is None:
             raise ValueError("No model loaded. Load a model first.")
