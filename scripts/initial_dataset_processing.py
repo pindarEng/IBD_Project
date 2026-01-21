@@ -51,7 +51,7 @@ def load_and_process_data():
     combined_df = combined_df.sample(frac=1).reset_index(drop=True)
     
     # Save/workspace/IBD project/datasets/processed
-    output_path = 'datasets/processed/processed_urls.csv'
+    output_path = 'datasets/processed/processed_urls_test.csv'
     combined_df.to_csv(output_path, index=False)
     print(f"Saved processed data to {output_path} with {len(combined_df)} rows.")
     print(combined_df['label'].value_counts())

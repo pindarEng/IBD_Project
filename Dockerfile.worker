@@ -35,6 +35,7 @@ ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY datasets /app/datasets
 COPY scripts/consumer_tiered_pipeline.py /app/scripts/
 COPY helper_functions /app/helper_functions
 COPY models /app/models

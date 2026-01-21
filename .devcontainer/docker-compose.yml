@@ -22,7 +22,7 @@ services:
             - tools
         depends_on:
             - kafka
-    
+
     url-worker:
         build:
             context: ..
@@ -35,6 +35,9 @@ services:
             - tools
         depends_on:
             - kafka
+        volumes:
+            - ./datasets:/app/datasets
+               
 
     zookeeper:
         image: confluentinc/cp-zookeeper:7.4.0
