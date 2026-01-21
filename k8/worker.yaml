@@ -17,7 +17,7 @@ spec:
         spec:
             containers:
                 - name: url-worker
-                  image: alexandruvidu/url-worker:latest
+                  image: andreimurica/url-worker:latest
                   imagePullPolicy: IfNotPresent
                   ports:
                       - containerPort: 8001
